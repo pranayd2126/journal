@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { dbService } from './services/dbService';
-import { where, orderBy } from 'firebase/firestore';
 import { Trade, UserSettings } from './types';
 import { useRiskManager } from './hooks/useRiskManager';
 
@@ -52,9 +51,7 @@ export default function App() {
     if (user) {
       const fetchData = async () => {
         const [tradesData, settingsData] = await Promise.all([
-          dbService.getCollection<Trade>(`users/${user.uid}/trades`, [
-            orderBy('createdAt', 'desc')
-          ]),
+          dbService.getCollection<Trade>(`users/${user.uid}/trades`),
           dbService.getDocument<UserSettings>(`users/${user.uid}/settings`, 'current')
         ]);
         setTrades(tradesData);

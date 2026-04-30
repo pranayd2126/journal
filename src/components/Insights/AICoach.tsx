@@ -6,7 +6,6 @@ import { auth } from '../../lib/firebase';
 import { BrainCircuit, Sparkles, MessageSquare, AlertCircle, Quote, Loader2, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { format } from 'date-fns';
-import { where, orderBy } from 'firebase/firestore';
 
 interface AICoachProps {
   trades: Trade[];
@@ -19,9 +18,7 @@ export default function AICoach({ trades }: AICoachProps) {
   useEffect(() => {
     if (auth.currentUser) {
       const fetchInsights = async () => {
-        const data = await dbService.getCollection<AIInsight>(`users/${auth.currentUser?.uid}/insights`, [
-          orderBy('createdAt', 'desc')
-        ]);
+        const data = await dbService.getCollection<AIInsight>(`users/${auth.currentUser?.uid}/insights`);
         setInsights(data);
       };
       fetchInsights();
