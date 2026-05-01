@@ -1,7 +1,6 @@
 import { useState, useMemo, FormEvent } from 'react';
 import { Trade, EmotionalState, UserSettings } from '../../types';
 import { dbService } from '../../services/dbService';
-import { auth } from '../../lib/firebase';
 import { Plus, X, Check, Target, TrendingDown, TrendingUp, AlertCircle, AlertTriangle, BarChart3, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { useRiskManager } from '../../hooks/useRiskManager';
@@ -41,7 +40,7 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
     riskPercentage: '1',
     setupType: '',
     tradeReason: '',
-    marketCondition: 'TRENDING' as any,
+    marketCondition: 'TRENDING_UP' as any,
     confirmations: [] as string[],
     entryQuality: 'PERFECT' as any,
     exitQuality: 'PERFECT' as any,
@@ -55,7 +54,7 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
     revengeTrade: false,
     pressureToWin: false,
     overallTrend: 'NEUTRAL' as any,
-    volatility: 'MEDIUM' as any,
+    volatility: 'LOW' as any,
     newsEvent: false,
     mistakes: [] as string[]
   };
@@ -76,10 +75,11 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser || (risk.isLocked && !editingTradeId)) return;
+    const user = dbService.getCurrentUser();
+    if (!user || risk.isLocked) return;
 
     const tradeData: any = {
-      userId: auth.currentUser.uid,
+      userId: user.id,
       symbol: formData.symbol.toUpperCase(),
       side: formData.side,
       entryPrice: parseFloat(formData.entryPrice),
@@ -118,13 +118,13 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
 
     try {
       if (editingTradeId) {
-        await dbService.updateDocument(`users/${auth.currentUser.uid}/trades`, editingTradeId, tradeData);
+        await dbService.updateDocument(`users/${user.id}/trades`, editingTradeId, tradeData);
         onTradeUpdated({ ...tradeData, id: editingTradeId });
       } else {
         tradeData.entryTime = new Date().toISOString();
         tradeData.exitTime = new Date().toISOString();
         tradeData.createdAt = null; // serverTimestamp handled by dbService
-        const id = await dbService.addDocument(`users/${auth.currentUser.uid}/trades`, tradeData);
+        const id = await dbService.addDocument(`users/${user.id}/trades`, tradeData);
         onTradeAdded({ ...tradeData, id });
       }
       setIsAdding(false);
@@ -149,7 +149,7 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
       riskPercentage: trade.riskPercentage?.toString() || '1',
       setupType: trade.setupType,
       tradeReason: trade.tradeReason || '',
-      marketCondition: trade.marketCondition || 'TRENDING',
+      marketCondition: trade.marketCondition || 'TRENDING_UP',
       confirmations: trade.confirmations || [],
       entryQuality: trade.executionQuality?.entry || 'PERFECT',
       exitQuality: trade.executionQuality?.exit || 'PERFECT',
@@ -163,7 +163,7 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
       revengeTrade: trade.psychology?.revengeTrade ?? false,
       pressureToWin: trade.psychology?.pressureToWin ?? false,
       overallTrend: trade.marketContext?.overallTrend || 'NEUTRAL',
-      volatility: trade.marketContext?.volatility || 'MEDIUM',
+      volatility: trade.marketContext?.volatility || 'LOW',
       newsEvent: trade.marketContext?.newsEvent ?? false,
       mistakes: trade.mistakes || []
     });
@@ -172,14 +172,18 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
   };
 
   const handleDelete = async (tradeId: string) => {
-    if (!auth.currentUser) return;
-    if (confirm('Are you sure you want to delete this trade? This action cannot be undone.')) {
-      try {
-        await dbService.deleteDocument(`users/${auth.currentUser.uid}/trades`, tradeId);
-        onTradeDeleted(tradeId);
-      } catch (err) {
-        console.error(err);
-      }
+    console.log('Attempting to delete trade:', tradeId);
+    const user = dbService.getCurrentUser();
+    if (!user) {
+      console.error('No user found in dbService');
+      return;
+    }
+    try {
+      await dbService.deleteDocument(`users/${user.id}/trades`, tradeId);
+      console.log('Trade deleted successfully from DB');
+      onTradeDeleted(tradeId);
+    } catch (err) {
+      console.error('Failed to delete trade:', err);
     }
   };
 
@@ -187,7 +191,11 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
     return [...trades].sort((a, b) => {
       let comparison = 0;
       if (sortBy === 'date') {
-        comparison = new Date(a.entryTime).getTime() - new Date(b.entryTime).getTime();
+        const dateA = new Date(a.entryTime).getTime();
+        const dateB = new Date(b.entryTime).getTime();
+        const timeA = isNaN(dateA) ? 0 : dateA;
+        const timeB = isNaN(dateB) ? 0 : dateB;
+        comparison = timeA - timeB;
       } else if (sortBy === 'pnl') {
         comparison = a.pnl - b.pnl;
       } else if (sortBy === 'symbol') {
@@ -353,24 +361,38 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
 
             {activeStep === 3 && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <QualitySelector 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <GranularSelector 
                     label="Overall Market Trend" 
                     value={formData.overallTrend} 
                     onChange={v => setFormData({...formData, overallTrend: v})} 
-                    options={['BULLISH', 'BEARISH', 'NEUTRAL']} 
+                    options={[
+                      { id: 'BULLISH', label: 'Bullish' },
+                      { id: 'BEARISH', label: 'Bearish' },
+                      { id: 'NEUTRAL', label: 'Neutral' }
+                    ]} 
                   />
-                  <QualitySelector 
+                  <GranularSelector 
                     label="Market Condition" 
                     value={formData.marketCondition} 
                     onChange={v => setFormData({...formData, marketCondition: v})} 
-                    options={['TRENDING', 'SIDEWAYS', 'VOLATILE']} 
+                    options={[
+                      { id: 'TRENDING_UP', label: 'Trending Up' },
+                      { id: 'TRENDING_DOWN', label: 'Trending Down' },
+                      { id: 'SIDEWAYS', label: 'Sideways Range' },
+                      { id: 'CHOPPY', label: 'Choppy' }
+                    ]} 
                   />
-                  <QualitySelector 
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
+                  <GranularSelector 
                     label="Volatility" 
                     value={formData.volatility} 
                     onChange={v => setFormData({...formData, volatility: v})} 
-                    options={['LOW', 'MEDIUM', 'HIGH']} 
+                    options={[
+                      { id: 'LOW', label: 'Low Volatility' },
+                      { id: 'HIGH', label: 'High Volatility' }
+                    ]} 
                   />
                 </div>
                 <div className="p-4 bg-zinc-900 rounded-2xl">
@@ -462,7 +484,14 @@ export default function TradeJournal({ trades, onTradeAdded, onTradeUpdated, onT
                       </span>
                     </div>
                     <p className="text-xs text-zinc-500">
-                      {trade.quantity} units • {format(new Date(trade.entryTime), 'MMM d, HH:mm')}
+                      {trade.quantity} units • {(() => {
+                        try {
+                          const d = new Date(trade.entryTime);
+                          return !isNaN(d.getTime()) ? format(d, 'MMM d, HH:mm') : 'Invalid date';
+                        } catch (e) {
+                          return 'Invalid date';
+                        }
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -547,6 +576,28 @@ function Checkbox({ label, checked, onChange }: any) {
       </div>
       <span className={`text-sm font-medium ${checked ? 'text-white' : 'text-zinc-500'}`}>{label}</span>
     </button>
+  );
+}
+
+function GranularSelector({ label, value, onChange, options }: any) {
+  return (
+    <div className="space-y-3">
+      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{label}</label>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        {options.map((opt: { id: string, label: string }) => (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => onChange(opt.id || opt as any)}
+            className={`py-2.5 px-2 text-[10px] font-bold rounded-xl border transition-all ${
+              (value === opt.id || value === opt) ? 'bg-white text-black border-white' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700'
+            }`}
+          >
+            {opt.label || opt}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

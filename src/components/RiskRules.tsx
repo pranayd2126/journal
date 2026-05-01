@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Trade, UserSettings } from '../types';
 import { dbService } from '../services/dbService';
-import { auth } from '../lib/firebase';
 import { ShieldAlert, ShieldCheck, Lock, Unlock, AlertTriangle, Info, Save } from 'lucide-react';
 import { format, startOfDay, startOfMonth, isWithinInterval, subDays } from 'date-fns';
 
@@ -44,12 +43,13 @@ export default function RiskRules({ trades, settings, onSettingsUpdate }: RiskRu
   }, [trades, localSettings]);
 
   const handleSave = async () => {
-    if (!auth.currentUser) return;
+    const user = dbService.getCurrentUser();
+    if (!user) return;
     const updated = {
       ...localSettings,
-      userId: auth.currentUser.uid
+      userId: user.id
     };
-    await dbService.setDocument(`users/${auth.currentUser.uid}/settings`, 'current', updated);
+    await dbService.setDocument(`users/${user.id}/settings`, 'current', updated);
     onSettingsUpdate(updated);
     setIsEditing(false);
   };

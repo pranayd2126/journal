@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Trade, AIInsight, DailyChecklist } from '../../types';
 import { aiService } from '../../services/aiService';
 import { dbService } from '../../services/dbService';
-import { auth } from '../../lib/firebase';
 import { BrainCircuit, Sparkles, MessageSquare, AlertCircle, Quote, Loader2, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { format } from 'date-fns';
@@ -16,9 +15,10 @@ export default function AICoach({ trades }: AICoachProps) {
   const [insights, setInsights] = useState<AIInsight[]>([]);
 
   useEffect(() => {
-    if (auth.currentUser) {
+    const user = dbService.getCurrentUser();
+    if (user) {
       const fetchInsights = async () => {
-        const data = await dbService.getCollection<AIInsight>(`users/${auth.currentUser?.uid}/insights`);
+        const data = await dbService.getCollection<AIInsight>(`users/${user.id}/insights`);
         setInsights(data);
       };
       fetchInsights();
@@ -26,15 +26,16 @@ export default function AICoach({ trades }: AICoachProps) {
   }, []);
 
   const generateDailyAnalysis = async () => {
-    if (!auth.currentUser || trades.length === 0) return;
+    const user = dbService.getCurrentUser();
+    if (!user || trades.length === 0) return;
     setLoading(true);
     
     // Filter trades for today
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const todayTrades = trades.filter(t => t.entryTime.startsWith(todayStr));
+    const todayTrades = trades.filter(t => t.entryTime && t.entryTime.startsWith(todayStr));
     
     // Fetch today's checklist
-    const checklists = await dbService.getCollection<DailyChecklist>(`users/${auth.currentUser.uid}/checklists`);
+    const checklists = await dbService.getCollection<DailyChecklist>(`users/${user.id}/checklists`);
     const todayChecklist = checklists.find(c => c.date === todayStr) || null;
     
     const analysis = await aiService.analyzeDailyTrades(
@@ -44,7 +45,7 @@ export default function AICoach({ trades }: AICoachProps) {
     
     if (analysis) {
       const newInsight: any = {
-        userId: auth.currentUser.uid,
+        userId: user.id,
         type: 'DAILY',
         period: todayStr,
         content: analysis.content,
@@ -53,7 +54,7 @@ export default function AICoach({ trades }: AICoachProps) {
         suggestions: analysis.suggestions,
       };
       
-      const id = await dbService.addDocument(`users/${auth.currentUser.uid}/insights`, newInsight);
+      const id = await dbService.addDocument(`users/${user.id}/insights`, newInsight);
       setInsights([{ ...newInsight, id }, ...insights]);
     }
     setLoading(false);

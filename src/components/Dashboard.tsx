@@ -25,8 +25,20 @@ export default function Dashboard({ trades, settings }: DashboardProps) {
     // Performance items for charts
     const pnlHistory = trades.slice().reverse().reduce((acc: any[], trade) => {
       const prevTotal = acc.length > 0 ? acc[acc.length - 1].cumulative : 0;
+      let dateStr = 'Unknown';
+      try {
+        if (trade.entryTime) {
+          const date = parseISO(trade.entryTime);
+          if (!isNaN(date.getTime())) {
+            dateStr = format(date, 'MMM dd');
+          }
+        }
+      } catch (e) {
+        console.error('Invalid date for trade:', trade);
+      }
+      
       acc.push({
-        date: format(parseISO(trade.entryTime), 'MMM dd'),
+        date: dateStr,
         pnl: trade.pnl,
         cumulative: prevTotal + trade.pnl
       });
@@ -35,7 +47,11 @@ export default function Dashboard({ trades, settings }: DashboardProps) {
 
     // Mistakes frequency
     const mistakeCounts: Record<string, number> = {};
-    trades.forEach(t => t.mistakes.forEach(m => mistakeCounts[m] = (mistakeCounts[m] || 0) + 1));
+    trades.forEach(t => {
+      if (t.mistakes && Array.isArray(t.mistakes)) {
+        t.mistakes.forEach(m => mistakeCounts[m] = (mistakeCounts[m] || 0) + 1);
+      }
+    });
     const mistakesData = Object.entries(mistakeCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 
     // Emotion vs PNL

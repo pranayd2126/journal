@@ -51,8 +51,58 @@ async function getDb() {
   }
 }
 
+import bcrypt from 'bcryptjs';
+
 app.use(cors());
 app.use(express.json());
+
+// --- AUTH ROUTES ---
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+    const database = await getDb();
+    const existingUser = await database.collection('users').findOne({ email: email.toLowerCase() });
+    
+    if (existingUser) return res.status(400).json({ error: 'Email already registered' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await database.collection('users').insertOne({
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      name,
+      createdAt: new Date()
+    });
+
+    const user = { id: result.insertedId.toString(), email, name };
+    res.json(user);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const database = await getDb();
+    
+    const user = await database.collection('users').findOne({ email: email.toLowerCase() });
+    if (!user) return res.status(400).json({ error: 'User not found' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
+
+    res.json({
+      id: user._id.toString(),
+      email: user.email,
+      name: user.name
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// --- END AUTH ROUTES ---
 
 // API Routes
 app.get('/api/:userId/trades', async (req, res) => {
@@ -103,6 +153,19 @@ app.delete('/api/:userId/trades/:tradeId', async (req, res) => {
       userId: req.params.userId 
     });
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// AI Analysis Proxy (Simple Mock for now)
+app.post('/api/ai/analyze', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    // Just a placeholder analysis
+    res.json({ 
+      analysis: "Based on your recent trades, it looks like you're handling risk well. Watch out for 'FOMO' on trending days. Keep following your stop loss rules." 
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

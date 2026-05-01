@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { dbService } from '../services/dbService';
-import { auth } from '../lib/firebase';
 import { DailyChecklist } from '../types';
 import { format } from 'date-fns';
 import { Check, ShieldCheck, Zap, Newspaper, CalendarCheck } from 'lucide-react';
@@ -12,22 +11,24 @@ export default function DailyHabits() {
   const today = format(new Date(), 'yyyy-MM-dd');
 
   useEffect(() => {
-    if (auth.currentUser) {
+    const user = dbService.getCurrentUser();
+    if (user) {
       const fetchChecklist = async () => {
-        const data = await dbService.getCollection<DailyChecklist>(`users/${auth.currentUser?.uid}/checklists`);
+        const data = await dbService.getCollection<DailyChecklist>(`users/${user.id}/checklists`);
         const todayData = data.find(c => c.date === today);
         if (todayData) setChecklist(todayData);
         setLoading(false);
       };
       fetchChecklist();
     }
-  }, [auth.currentUser]);
+  }, []);
 
   const toggleHabit = async (key: keyof Omit<DailyChecklist, 'id' | 'userId' | 'date' | 'disciplineScore' | 'createdAt'>) => {
-    if (!auth.currentUser) return;
+    const user = dbService.getCurrentUser();
+    if (!user) return;
 
     const updated = checklist ? { ...checklist, [key]: !checklist[key] } : {
-      userId: auth.currentUser.uid,
+      userId: user.id,
       date: today,
       followedRisk: false,
       noFOMO: false,
@@ -44,10 +45,10 @@ export default function DailyHabits() {
     updated.disciplineScore = (habits.filter(Boolean).length / habits.length) * 100;
 
     if (checklist?.id) {
-      await dbService.updateDocument(`users/${auth.currentUser.uid}/checklists`, checklist.id, updated);
+      await dbService.updateDocument(`users/${user.id}/checklists`, checklist.id, updated);
       setChecklist(updated);
     } else {
-      const id = await dbService.addDocument(`users/${auth.currentUser.uid}/checklists`, updated);
+      const id = await dbService.addDocument(`users/${user.id}/checklists`, updated);
       setChecklist({ ...updated, id });
     }
   };

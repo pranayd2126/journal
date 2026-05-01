@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './lib/firebase';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import TradeJournal from './components/Trades/TradeJournal';
@@ -40,26 +38,42 @@ export default function App() {
   const risk = useRiskManager(trades, settings);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    const savedUser = dbService.getCurrentUser();
+    if (savedUser) {
+      setUser(savedUser);
+      fetchUserData(savedUser.id);
+    } else {
       setLoading(false);
-    });
-    return () => unsubscribe();
+    }
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      const fetchData = async () => {
-        const [tradesData, settingsData] = await Promise.all([
-          dbService.getCollection<Trade>(`users/${user.uid}/trades`),
-          dbService.getDocument<UserSettings>(`users/${user.uid}/settings`, 'current')
-        ]);
-        setTrades(tradesData);
-        if (settingsData) setSettings(settingsData);
-      };
-      fetchData();
+  const fetchUserData = async (userId: string) => {
+    try {
+      const [tradesData, settingsData] = await Promise.all([
+        dbService.getCollection<Trade>(`users/${userId}/trades`),
+        dbService.getDocument<UserSettings>(`users/${userId}/settings`, 'current')
+      ]);
+      setTrades(tradesData);
+      if (settingsData) setSettings(settingsData);
+    } catch (err) {
+      console.error('Error fetching user data:', err);
+    } finally {
+      setLoading(false);
     }
-  }, [user]);
+  };
+
+  const handleLogin = (user: any) => {
+    setUser(user);
+    setLoading(true);
+    fetchUserData(user.id);
+  };
+
+  const handleLogout = () => {
+    dbService.setCurrentUser(null);
+    setUser(null);
+    setTrades([]);
+    setActiveTab('dashboard');
+  };
 
   if (loading) {
     return (
@@ -72,7 +86,7 @@ export default function App() {
   if (!user) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center px-4">
-        <Auth user={null} />
+        <Auth user={null} onLogin={handleLogin} onLogout={handleLogout} />
       </div>
     );
   }
@@ -122,7 +136,7 @@ export default function App() {
         })}
 
         <div className="md:mt-auto">
-          <Auth user={user} />
+          <Auth user={user} onLogin={handleLogin} onLogout={handleLogout} />
         </div>
       </nav>
 
@@ -133,7 +147,7 @@ export default function App() {
             <h2 className="text-xl font-bold text-white tracking-tight">
               {tabs.find(t => t.id === activeTab)?.label}
             </h2>
-            <p className="text-xs text-zinc-500 font-mono">ZEN_TRADER_SESSION_ID: {currentUser.uid.slice(0, 8)}</p>
+            <p className="text-xs text-zinc-500 font-mono text-center md:text-left">ACCOUNT_SECURE_ID: {currentUser.id.slice(0, 8)}</p>
           </div>
           
           <div className="flex items-center gap-4">
@@ -181,9 +195,9 @@ export default function App() {
               {activeTab === 'journal' && (
                 <TradeJournal 
                   trades={trades} 
-                  onTradeAdded={(t) => setTrades([t, ...trades])} 
-                  onTradeUpdated={(t) => setTrades(trades.map(prev => prev.id === t.id ? t : prev))}
-                  onTradeDeleted={(id) => setTrades(trades.filter(prev => prev.id !== id))}
+                  onTradeAdded={(t) => setTrades(prev => [t, ...prev])} 
+                  onTradeUpdated={(t) => setTrades(prev => prev.map(p => p.id === t.id ? t : p))}
+                  onTradeDeleted={(id) => setTrades(prev => prev.filter(p => p.id !== id))}
                   settings={settings} 
                 />
               )}
