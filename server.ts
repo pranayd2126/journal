@@ -4,6 +4,18 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { MongoClient, ObjectId, ServerApiVersion } from 'mongodb';
 import { createServer as createViteServer } from 'vite';
+import { v2 as cloudinary } from 'cloudinary';
+import multer from 'multer';
+
+// Cloudinary Config - Use environment variables
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dseai82et',
+  api_key: process.env.CLOUDINARY_API_KEY || '257249928884971',
+  api_secret: process.env.CLOUDINARY_API_SECRET || 'krHy-HWvO1o7LHkrpKIPQKfCJxQ'
+});
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -159,14 +171,45 @@ app.delete('/api/:userId/trades/:tradeId', async (req, res) => {
 });
 
 // AI Analysis Proxy (Simple Mock for now)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date() });
+});
+
 app.post('/api/ai/analyze', async (req, res) => {
   try {
     const { prompt } = req.body;
-    // Just a placeholder analysis
     res.json({ 
       analysis: "Based on your recent trades, it looks like you're handling risk well. Watch out for 'FOMO' on trending days. Keep following your stop loss rules." 
     });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Image Upload to Cloudinary
+app.post('/api/upload', upload.single('image'), async (req: any, res: any) => {
+  console.log('--- Upload Request Received ---');
+  console.log('File:', req.file ? { name: req.file.originalname, size: req.file.size } : 'NONE');
+  try {
+    if (!req.file) {
+      console.error('Upload Error: No file provided');
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    console.log('Converting file to base64...');
+    const b64 = Buffer.from(req.file.buffer).toString('base64');
+    const dataURI = "data:" + req.file.mimetype + ";base64," + b64;
+    
+    console.log('Uploading to Cloudinary...');
+    const result = await cloudinary.uploader.upload(dataURI, {
+      folder: 'trading_journal_trades',
+      resource_type: 'auto'
+    });
+
+    console.log('Cloudinary Success:', result.secure_url);
+    res.json({ url: result.secure_url });
+  } catch (err: any) {
+    console.error('Cloudinary upload error:', err);
     res.status(500).json({ error: err.message });
   }
 });

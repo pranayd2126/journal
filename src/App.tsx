@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TradeJournal from './components/Trades/TradeJournal';
+import JournalDashboard from './components/JournalDashboard';
 import AICoach from './components/Insights/AICoach';
 import RiskRules from './components/RiskRules';
 import DailyHabits from './components/DailyHabits';
@@ -12,7 +14,9 @@ import {
   ShieldAlert, 
   Plus,
   Loader2, 
-  AlertTriangle
+  AlertTriangle,
+  LayoutDashboard,
+  PieChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { dbService } from './services/dbService';
@@ -24,6 +28,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   dailyLossLimit: 7000,
   singleTradeLossLimit: 5000,
   monthlyLossLimit: 15000,
+  totalCapital: 100000,
   riskBaseCurrency: 'INR',
   updatedAt: null
 };
@@ -31,7 +36,7 @@ const DEFAULT_SETTINGS: UserSettings = {
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'journal' | 'coach' | 'risk'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'journal' | 'vault' | 'coach' | 'risk' | 'analytics'>('dashboard');
   const [trades, setTrades] = useState<Trade[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
 
@@ -95,7 +100,9 @@ export default function App() {
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'analytics', label: 'Analytics', icon: PieChart },
     { id: 'journal', label: 'Journal', icon: BookOpen },
+    { id: 'vault', label: 'Journal Cards', icon: LayoutDashboard },
     { id: 'coach', label: 'AI Coach', icon: BrainCircuit },
     { id: 'risk', label: 'Risk Rules', icon: ShieldAlert },
   ] as const;
@@ -185,13 +192,14 @@ export default function App() {
               {activeTab === 'dashboard' && (
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
                   <div className="lg:col-span-3">
-                    <Dashboard trades={trades} settings={settings} />
+                    <Dashboard trades={trades} settings={settings} onSettingsUpdate={(s) => setSettings(s)} />
                   </div>
                   <div className="lg:col-span-1">
                     <DailyHabits />
                   </div>
                 </div>
               )}
+              {activeTab === 'analytics' && <AnalyticsDashboard trades={trades} />}
               {activeTab === 'journal' && (
                 <TradeJournal 
                   trades={trades} 
@@ -201,6 +209,7 @@ export default function App() {
                   settings={settings} 
                 />
               )}
+              {activeTab === 'vault' && <JournalDashboard trades={trades} />}
               {activeTab === 'coach' && <AICoach trades={trades} />}
               {activeTab === 'risk' && <RiskRules trades={trades} settings={settings} onSettingsUpdate={(s) => setSettings(s)} />}
             </motion.div>

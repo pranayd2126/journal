@@ -120,6 +120,12 @@ export default function RiskRules({ trades, settings, onSettingsUpdate }: RiskRu
 
           <div className="space-y-6">
             <SettingsInput 
+              label="Starting Account Capital (₹)" 
+              value={localSettings.totalCapital} 
+              disabled={!isEditing} 
+              onChange={v => setLocalSettings({...localSettings, totalCapital: parseInt(v) || 0})} 
+            />
+            <SettingsInput 
               label="Daily Loss Limit (₹)" 
               value={localSettings.dailyLossLimit} 
               disabled={!isEditing} 

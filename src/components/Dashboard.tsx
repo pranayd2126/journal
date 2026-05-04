@@ -1,20 +1,25 @@
-import { ReactNode, useMemo } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, BarChart, Bar, Cell, PieChart, Pie, ScatterChart, Scatter, ZAxis, RadialBarChart, RadialBar, Legend
 } from 'recharts';
 import { Trade, UserSettings } from '../types';
 import { format, parseISO } from 'date-fns';
-import { Flame, Target, TrendingUp, ShieldAlert, Percent, Activity } from 'lucide-react';
+import { Flame, Target, TrendingUp, ShieldAlert, Percent, Activity, Wallet, Edit2, X, Check } from 'lucide-react';
 import { useRiskManager } from '../hooks/useRiskManager';
+import { dbService } from '../services/dbService';
 
 interface DashboardProps {
   trades: Trade[];
   settings: UserSettings;
+  onSettingsUpdate: (settings: UserSettings) => void;
 }
 
-export default function Dashboard({ trades, settings }: DashboardProps) {
+export default function Dashboard({ trades, settings, onSettingsUpdate }: DashboardProps) {
   const risk = useRiskManager(trades, settings);
+  const [isEditingCapital, setIsEditingCapital] = useState(false);
+  const [tempCapital, setTempCapital] = useState((settings.totalCapital ?? 100000).toString());
+
   const stats = useMemo(() => {
     const totalPnl = trades.reduce((acc, t) => acc + t.pnl, 0);
     const winRate = trades.length > 0 ? (trades.filter(t => t.pnl > 0).length / trades.length) * 100 : 0;
@@ -117,6 +122,27 @@ export default function Dashboard({ trades, settings }: DashboardProps) {
     return null;
   };
 
+  const currentCapital = (settings.totalCapital ?? 100000) + stats.totalPnl;
+
+  const handleUpdateCapital = async () => {
+    const newCapitalValue = parseFloat(tempCapital);
+    if (isNaN(newCapitalValue)) return;
+
+    const updatedSettings = {
+      ...settings,
+      totalCapital: newCapitalValue,
+      updatedAt: new Date()
+    };
+    
+    try {
+      await dbService.setDocument(`users/${settings.userId}/settings`, 'current', updatedSettings);
+      onSettingsUpdate(updatedSettings);
+      setIsEditingCapital(false);
+    } catch (err) {
+      console.error('Failed to update capital:', err);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Risk Alert if breached */}
@@ -150,12 +176,57 @@ export default function Dashboard({ trades, settings }: DashboardProps) {
           value={stats.totalTrades.toString()} 
           icon={Activity} 
         />
-        <StatCard 
-          label="Risk Status" 
-          value={risk.isLocked ? 'LOCKED' : 'NOMINAL'} 
-          icon={ShieldAlert}
-          trend={risk.isLocked ? 'down' : 'up'}
-        />
+        <div className="p-6 bg-zinc-950 border border-zinc-900 rounded-2xl relative group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 bg-zinc-900 rounded-lg">
+              <Wallet className="w-5 h-5 text-blue-500" />
+            </div>
+            {!isEditingCapital ? (
+              <button 
+                onClick={() => {
+                  setTempCapital((settings.totalCapital ?? 100000).toString());
+                  setIsEditingCapital(true);
+                }}
+                className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-md transition-all opacity-0 group-hover:opacity-100"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={handleUpdateCapital}
+                  className="p-1.5 text-emerald-500 hover:bg-emerald-500/10 rounded-md transition-all"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                  onClick={() => setIsEditingCapital(false)}
+                  className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-all"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+          <p className="text-zinc-500 text-sm font-medium">Account Capital</p>
+          {isEditingCapital ? (
+            <div className="mt-1 flex items-center gap-1">
+              <span className="text-zinc-500 font-mono">₹</span>
+              <input 
+                type="number"
+                value={tempCapital}
+                onChange={(e) => setTempCapital(e.target.value)}
+                className="bg-transparent border-b border-zinc-700 text-white font-mono font-bold text-xl w-full focus:outline-none focus:border-blue-500"
+                autoFocus
+              />
+            </div>
+          ) : (
+            <h3 className="text-2xl font-bold text-white mt-1 font-mono">₹{currentCapital.toLocaleString()}</h3>
+          )}
+          <p className="text-[10px] text-zinc-600 font-bold uppercase mt-1 tracking-wider">
+            Base: ₹{(settings.totalCapital ?? 100000).toLocaleString()}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

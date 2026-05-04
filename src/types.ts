@@ -9,7 +9,10 @@ export interface Trade {
   stopLoss?: number;
   targetPrice?: number;
   quantity: number;
+  brokerage: number;
   pnl: number;
+  imageUrl?: string;
+  tags?: string[];
   riskPercentage?: number;
   setupType: string;
   side: 'LONG' | 'SHORT';
@@ -18,7 +21,7 @@ export interface Trade {
   
   // Professional Context
   tradeReason?: string;
-  marketCondition?: 'TRENDING' | 'SIDEWAYS' | 'VOLATILE';
+  marketCondition?: 'TRENDING_UP' | 'TRENDING_DOWN' | 'SIDEWAYS' | 'CHOPPY' | 'VOLATILE';
   confirmations?: string[];
   
   // Execution Quality
@@ -43,7 +46,7 @@ export interface Trade {
   // Market Context
   marketContext: {
     overallTrend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-    volatility: 'LOW' | 'MEDIUM' | 'HIGH';
+    volatility: 'LOW' | 'HIGH' | 'MEDIUM';
     newsEvent: boolean;
   };
 
@@ -81,6 +84,7 @@ export interface UserSettings {
   dailyLossLimit: number;
   singleTradeLossLimit: number;
   monthlyLossLimit: number;
+  totalCapital: number;
   riskBaseCurrency: string;
   updatedAt: any;
 }
