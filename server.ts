@@ -6,6 +6,9 @@ import { MongoClient, ObjectId, ServerApiVersion } from 'mongodb';
 import { createServer as createViteServer } from 'vite';
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
+import bcrypt from 'bcryptjs';
+
+console.log('--- SERVER INITIALIZING ---');
 
 // Cloudinary Config - Use environment variables
 cloudinary.config({
@@ -24,7 +27,7 @@ const app = express();
 const PORT = 3000;
 
 // Use your provided connection string
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://dandapranayreddy2118_db_user:Danda2118@cluster0.jjrpebo.mongodb.net/";
+const DEFAULT_MONGODB_URI = "mongodb+srv://dandapranayreddy2118_db_user:Danda2118@cluster0.jjrpebo.mongodb.net/";
 
 let client: MongoClient | null = null;
 let db: any = null;
@@ -32,17 +35,19 @@ let db: any = null;
 async function getDb() {
   if (db) return db;
   
-  if (!client) {
-    let uri = process.env.MONGODB_URI;
-    
-    // Ensure we have a valid-looking URI, fallback to user provided one if empty or invalid
-    if (!uri || (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://"))) {
-      console.log("Using fallback MongoDB URI");
-      uri = "mongodb+srv://dandapranayreddy2118_db_user:Danda2118@cluster0.jjrpebo.mongodb.net/";
-    } else {
-      console.log("Using environment MONGODB_URI (starts with:", uri.split(':')[0], ")");
-    }
+  let uri = process.env.MONGODB_URI;
+  
+  // Ensure we have a valid-looking URI, fallback to user provided one if empty or invalid
+  if (!uri || (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://"))) {
+    console.log("Using fallback MongoDB URI because provided one is missing or invalid");
+    uri = DEFAULT_MONGODB_URI;
+  } else {
+    console.log("Using environment MONGODB_URI");
+  }
 
+  console.log('Connecting to MongoDB...');
+
+  if (!client) {
     client = new MongoClient(uri, {
       serverApi: {
         version: ServerApiVersion.v1,
@@ -63,13 +68,12 @@ async function getDb() {
   }
 }
 
-import bcrypt from 'bcryptjs';
-
 app.use(cors());
 app.use(express.json());
 
 // --- AUTH ROUTES ---
 app.post('/api/auth/signup', async (req, res) => {
+  console.log('POST /api/auth/signup');
   try {
     const { email, password, name } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -95,22 +99,32 @@ app.post('/api/auth/signup', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
+  console.log('POST /api/auth/login');
   try {
     const { email, password } = req.body;
     const database = await getDb();
     
+    console.log('Validating user:', email);
     const user = await database.collection('users').findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(400).json({ error: 'User not found' });
+    if (!user) {
+      console.log('User not found:', email);
+      return res.status(400).json({ error: 'User not found' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
+    if (!isMatch) {
+      console.log('Invalid password for user:', email);
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
 
+    console.log('Login successful:', email);
     res.json({
       id: user._id.toString(),
       email: user.email,
       name: user.name
     });
   } catch (err: any) {
+    console.error('Login Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -314,6 +328,7 @@ if (process.env.NODE_ENV !== 'production') {
   const distPath = path.join(process.cwd(), 'dist');
   app.use(express.static(distPath));
   app.get('*', (req, res) => {
+    console.log('Catch-all route hit:', req.method, req.url);
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }

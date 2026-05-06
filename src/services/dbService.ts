@@ -1,11 +1,14 @@
 import { OperationType, type FirestoreErrorInfo } from '../types';
 
 async function handleApiError(error: unknown, operationType: OperationType, path: string | null) {
+  const userStr = localStorage.getItem('trading_journal_user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: 'LOCAL_SESSION',
-      email: 'LOCAL_SESSION',
+      userId: user?.id || 'LOCAL_SESSION',
+      email: user?.email || 'LOCAL_SESSION',
       emailVerified: true,
       isAnonymous: false,
     },
@@ -46,7 +49,14 @@ export const dbService = {
 
       const response = await fetch(endpoint);
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const contentType = response.headers.get('content-type');
+        let errorData;
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await response.json().catch(() => ({}));
+        } else {
+          const text = await response.text();
+          throw new Error(`Server returned non-JSON error: ${text.slice(0, 100)} (${response.status})`);
+        }
         throw new Error(errorData.error || `Failed to fetch collection (${response.status})`);
       }
       return await response.json();

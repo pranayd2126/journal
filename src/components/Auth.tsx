@@ -39,12 +39,22 @@ export default function Auth({ user, onLogin, onLogout }: AuthProps) {
         })
       });
 
-      const data = await response.json();
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('Non-JSON response:', text);
+        throw new Error(`Server returned non-JSON response (${response.status})`);
+      }
+
       if (!response.ok) throw new Error(data.error || 'Authentication failed');
 
       dbService.setCurrentUser(data);
       onLogin(data);
     } catch (err: any) {
+      console.error('Auth Error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
