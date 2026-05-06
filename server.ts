@@ -170,22 +170,6 @@ app.delete('/api/:userId/trades/:tradeId', async (req, res) => {
   }
 });
 
-// AI Analysis Proxy (Simple Mock for now)
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date() });
-});
-
-app.post('/api/ai/analyze', async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    res.json({ 
-      analysis: "Based on your recent trades, it looks like you're handling risk well. Watch out for 'FOMO' on trending days. Keep following your stop loss rules." 
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // Image Upload to Cloudinary
 app.post('/api/upload', upload.single('image'), async (req: any, res: any) => {
   console.log('--- Upload Request Received ---');

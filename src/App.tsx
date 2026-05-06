@@ -4,13 +4,11 @@ import Dashboard from './components/Dashboard';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import TradeJournal from './components/Trades/TradeJournal';
 import JournalDashboard from './components/JournalDashboard';
-import AICoach from './components/Insights/AICoach';
 import RiskRules from './components/RiskRules';
 import DailyHabits from './components/DailyHabits';
 import { 
   BarChart3, 
   BookOpen, 
-  BrainCircuit, 
   ShieldAlert, 
   Plus,
   Loader2, 
@@ -36,7 +34,7 @@ const DEFAULT_SETTINGS: UserSettings = {
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'journal' | 'vault' | 'coach' | 'risk' | 'analytics'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'journal' | 'vault' | 'risk' | 'analytics'>('dashboard');
   const [trades, setTrades] = useState<Trade[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
 
@@ -103,7 +101,6 @@ export default function App() {
     { id: 'analytics', label: 'Analytics', icon: PieChart },
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'vault', label: 'Journal Cards', icon: LayoutDashboard },
-    { id: 'coach', label: 'AI Coach', icon: BrainCircuit },
     { id: 'risk', label: 'Risk Rules', icon: ShieldAlert },
   ] as const;
 
@@ -113,7 +110,7 @@ export default function App() {
       <nav className="fixed bottom-0 left-0 right-0 md:top-0 md:bottom-0 md:w-20 bg-zinc-950 border-t md:border-t-0 md:border-r border-zinc-900 z-50 flex md:flex-col items-center justify-around md:justify-center py-4 gap-8">
         <div className="hidden md:block mb-12">
           <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <BrainCircuit className="text-white w-6 h-6" />
+            <BarChart3 className="text-white w-6 h-6" />
           </div>
         </div>
         
@@ -210,7 +207,6 @@ export default function App() {
                 />
               )}
               {activeTab === 'vault' && <JournalDashboard trades={trades} />}
-              {activeTab === 'coach' && <AICoach trades={trades} />}
               {activeTab === 'risk' && <RiskRules trades={trades} settings={settings} onSettingsUpdate={(s) => setSettings(s)} />}
             </motion.div>
           </AnimatePresence>

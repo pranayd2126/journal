@@ -1,7 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { Trade, DailyChecklist } from "../types";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export const aiService = {
   async analyzeDailyTrades(trades: Trade[], checklist: DailyChecklist | null) {
@@ -27,44 +24,19 @@ export const aiService = {
       }
     } : 'No checklist provided';
 
-    const prompt = `
-      Analyze these trades and daily habits for a professional trader.
-      Trades: ${JSON.stringify(tradesContext)}
-      Daily Habits: ${JSON.stringify(checklistContext)}
-
-      Provide a deep behavioral analysis. Identify if the trader was emotional, impulsive, or disciplined.
-      Detect recurring mistakes like FOMO, revenge trading, or over-risking.
-      Give specific, strict coaching advice as if you are a master trading coach.
-    `;
-
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              content: { type: Type.STRING, description: "Detailed analysis text" },
-              topMistakes: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "List of detected mistakes"
-              },
-              suggestions: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "Coaching suggestions"
-              },
-              disciplineScore: { type: Type.NUMBER, description: "0-100 score" }
-            },
-            required: ["content", "topMistakes", "suggestions", "disciplineScore"]
-          }
-        }
+      const response = await fetch('/api/ai/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          tradesContext, 
+          checklistContext,
+          isWeekly: false 
+        })
       });
 
-      return JSON.parse(response.text);
+      if (!response.ok) throw new Error('AI Analysis failed');
+      return await response.json();
     } catch (error) {
       console.error("AI Analysis Error:", error);
       return null;
@@ -72,32 +44,25 @@ export const aiService = {
   },
 
   async analyzeWeeklyPerformance(trades: Trade[]) {
-    // Similar to daily but aggregates more data
-    const prompt = `
-      Perform a WEEKLY review for the following trades: ${JSON.stringify(trades.slice(0, 50))}
-      Identify the top 3 weaknesses this week.
-      Acknowledge what went right.
-      Set 3 strict goals for next week.
-    `;
+    const tradesContext = trades.slice(0, 50).map(t => ({
+      symbol: t.symbol,
+      pnl: t.pnl,
+      setup: t.setupType,
+      mistakes: t.mistakes
+    }));
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              content: { type: Type.STRING },
-              topMistakes: { type: Type.ARRAY, items: { type: Type.STRING } },
-              suggestions: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ["content", "topMistakes", "suggestions"]
-          }
-        }
+      const response = await fetch('/api/ai/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          tradesContext, 
+          isWeekly: true 
+        })
       });
-      return JSON.parse(response.text);
+
+      if (!response.ok) throw new Error('AI Weekly Analysis failed');
+      return await response.json();
     } catch (error) {
       console.error("AI Weekly Analysis Error:", error);
       return null;
